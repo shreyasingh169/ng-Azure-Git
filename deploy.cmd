@@ -2,7 +2,7 @@
 
 :: ----------------------
 :: KUDU Deployment Script
-:: Version: 1.0.17
+:: Version: 1.0.16
 :: ----------------------
 
 :: Prerequisites
@@ -88,35 +88,36 @@ goto :EOF
 :Deployment
 echo Handling node.js deployment.
 
-:: 1. Select node version
+:: 2. Select node version
 call :SelectNodeVersion
 
-:: 2. Install npm packages
+:: 3. Install npm devDependancy packages with explicit flag --only=dev at DEPLOYMENT_SOURCE instead of DEPLOYMENT_TARGET
+echo =======  Installing npm  devDependancy packages: Starting at %TIME% ======= 
+IF EXIST "%DEPLOYMENT_SOURCE%\package.json" (
+  pushd "%DEPLOYMENT_SOURCE%"
+  call :ExecuteCmd !NPM_CMD! install --only=dev
+  IF !ERRORLEVEL! NEQ 0 goto error
+  popd
+)
+echo =======  Installing npm dev packages: Finished at %TIME% =======
+
+::4 Do KuduSync BEFORE INSTALLING PRODUCTION DEPENDANCIES
+echo ======= Kudu Syncing: Starting at %TIME% ======= 
+IF /I "%IN_PLACE_DEPLOYMENT%" NEQ "1" (
+  call :ExecuteCmd "%KUDU_SYNC_CMD%" -v 50 -f "%DEPLOYMENT_SOURCE%" -t "%DEPLOYMENT_TARGET%" -n "%NEXT_MANIFEST_PATH%" -p "%PREVIOUS_MANIFEST_PATH%" -i ".git;.vscode;node_modules;src;typings;.bowerrc;.deployment;.gitignore;bower.json;deploy.cmd;gulpfile.js;tsconfig.json;tsd.json;.hg;.deployment;deploy.cmd;*.xml;*.yml"
+  IF !ERRORLEVEL! NEQ 0 goto error
+)
+echo ======= Kudu Syncing: Finished at %TIME% =======
+
+:: 5. Install npm packages at DEPLOYMENT_TARGET 
+echo =======  Installing npm packages: Starting at %TIME% ======= 
 IF EXIST "%DEPLOYMENT_TARGET%\package.json" (
   pushd "%DEPLOYMENT_TARGET%"
   call :ExecuteCmd !NPM_CMD! install --production
   IF !ERRORLEVEL! NEQ 0 goto error
   popd
 )
-
-:: 3. Angular Prod Build
-IF EXIST "%DEPLOYMENT_SOURCE%/.angular-cli.json" (
-echo Building App in %DEPLOYMENT_SOURCE%…
-pushd "%DEPLOYMENT_SOURCE%"
-call :ExecuteCmd !NPM_CMD! run build
-:: If the above command fails comment above and uncomment below one
-:: call ./node_modules/.bin/ng build –prod
-IF !ERRORLEVEL! NEQ 0 goto error
-popd
-)
-
-:: 4. KuduSync
-IF /I "%IN_PLACE_DEPLOYMENT%" NEQ "1" (
-  call :ExecuteCmd "%KUDU_SYNC_CMD%" -v 50 -f "%DEPLOYMENT_SOURCE%/dist" -t "%DEPLOYMENT_TARGET%" -n "%NEXT_MANIFEST_PATH%" -p "%PREVIOUS_MANIFEST_PATH%" -i ".git;.hg;.deployment;deploy.cmd"
-  IF !ERRORLEVEL! NEQ 0 goto error
-)
-
-
+echo =======  Installing npm packages: Finished at %TIME% =======
 ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 goto end
 
